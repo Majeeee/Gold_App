@@ -1,13 +1,30 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getAlerts, createAlert, deleteAlert, toggleAlert } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import ws from '../../services/websocket';
 import styles from './Alerts.module.css';
 
 export default function Alerts() {
-  const [alerts, setAlerts]     = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const { user }                   = useAuth();
+  const [alerts, setAlerts]        = useState([]);
+  const [loading, setLoading]      = useState(true);
+  const [showForm, setShowForm]    = useState(false);
+  const [toast, setToast]          = useState(null);   // real-time alert notification
+  const toastTimer                 = useRef(null);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+
+    // Listen for real-time alert triggers via WebSocket
+    const unsub = ws.onAlert(event => {
+      // Only show toast for the current user's alerts
+      if (event.userEmail && user?.email && event.userEmail !== user.email) return;
+      showToast(event);
+      load(); // refresh list so triggered badge appears
+    });
+
+    return () => unsub();
+  }, [user?.email]); // eslint-disable-line
 
   const load = async () => {
     try {
@@ -15,6 +32,12 @@ export default function Alerts() {
       setAlerts(res.data);
     } catch (e) { console.error(e.message); }
     finally { setLoading(false); }
+  };
+
+  const showToast = (event) => {
+    setToast(event);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 6000);
   };
 
   const handleDelete = async (id) => {
@@ -30,6 +53,28 @@ export default function Alerts() {
 
   return (
     <div className={styles.page}>
+
+      {/* Real-time toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', top: 20, right: 20, zIndex: 9999,
+          background: '#1a1200', border: '1px solid #f59e0b',
+          borderRadius: 12, padding: '14px 18px', maxWidth: 340,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
+          animation: 'slideIn 0.3s ease',
+        }}>
+          <div style={{ fontWeight: 700, color: '#fbbf24', marginBottom: 4, fontSize: 14 }}>
+            🔔 Alert Triggered!
+          </div>
+          <div style={{ color: '#d4b483', fontSize: 13, lineHeight: 1.4 }}>
+            {toast.market} — {toast.message?.split('\n')[2] || toast.price}
+          </div>
+          <button onClick={() => setToast(null)}
+            style={{ position: 'absolute', top: 8, right: 10, background: 'none',
+                     border: 'none', color: '#666', cursor: 'pointer', fontSize: 14 }}>✕</button>
+        </div>
+      )}
+
       <div className={styles.header}>
         <div>
           <h2 className={styles.title}>Price Alerts</h2>
@@ -41,9 +86,7 @@ export default function Alerts() {
       </div>
 
       {showForm && (
-        <CreateAlertForm
-          onCreated={() => { setShowForm(false); load(); }}
-        />
+        <CreateAlertForm onCreated={() => { setShowForm(false); load(); }} />
       )}
 
       {loading ? (
@@ -95,8 +138,7 @@ function AlertRow({ alert, onDelete, onToggle }) {
           className={`${styles.toggleBtn} ${alert.active && !alert.triggered ? styles.toggleOn : styles.toggleOff}`}
           onClick={onToggle}
           disabled={alert.triggered}
-          title={alert.active ? 'Disable' : 'Enable'}
-        >
+          title={alert.active ? 'Disable' : 'Enable'}>
           {alert.active && !alert.triggered ? 'ON' : 'OFF'}
         </button>
         <button className={styles.deleteBtn} onClick={onDelete}>✕</button>
@@ -128,7 +170,6 @@ function CreateAlertForm({ onCreated }) {
   return (
     <form className={styles.form} onSubmit={submit}>
       <div className={styles.formRow}>
-        {/* Market */}
         <div className={styles.formGroup}>
           <label className={styles.lbl}>Market</label>
           <div className={styles.segmented}>
@@ -142,7 +183,6 @@ function CreateAlertForm({ onCreated }) {
           </div>
         </div>
 
-        {/* Condition */}
         <div className={styles.formGroup}>
           <label className={styles.lbl}>Condition</label>
           <div className={styles.segmented}>
@@ -157,30 +197,18 @@ function CreateAlertForm({ onCreated }) {
           </div>
         </div>
 
-        {/* Price */}
         <div className={styles.formGroup}>
-          <label className={styles.lbl}>
-            Target Price ({market === 'IRAN' ? 'Tomans' : 'USD'})
-          </label>
-          <input
-            className={styles.inp}
-            type="number"
+          <label className={styles.lbl}>Target Price ({market === 'IRAN' ? 'Tomans' : 'USD'})</label>
+          <input className={styles.inp} type="number"
             placeholder={market === 'IRAN' ? 'e.g. 85000000' : 'e.g. 3400'}
-            value={price}
-            onChange={e => setPrice(e.target.value)}
-          />
+            value={price} onChange={e => setPrice(e.target.value)} />
         </div>
 
-        {/* Message */}
         <div className={styles.formGroup}>
           <label className={styles.lbl}>Note (optional)</label>
-          <input
-            className={styles.inp}
-            type="text"
+          <input className={styles.inp} type="text"
             placeholder="e.g. Buy signal level"
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-          />
+            value={message} onChange={e => setMessage(e.target.value)} />
         </div>
 
         <button type="submit" className={styles.submitBtn} disabled={loading}>

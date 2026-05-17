@@ -7,6 +7,7 @@ import IranMarket from './IranMarket';
 import Portfolio from './Portfolio';
 import Backtest from './Backtest';
 import Alerts from './Alerts';
+import Journal from './Journal';
 import styles from './Dashboard.module.css';
 
 const STATUS_COLORS = {
@@ -61,6 +62,10 @@ export default function Dashboard() {
             `${styles.navItem} ${isActive ? styles.navActive : ''}`}>
             🔔 Alerts
           </NavLink>
+          <NavLink to="/dashboard/journal" className={({ isActive }) =>
+            `${styles.navItem} ${isActive ? styles.navActive : ''}`}>
+            📓 Journal
+          </NavLink>
           {user?.role === 'ROLE_ADMIN' && (
             <NavLink to="/admin" className={styles.navItem}>
               ⚙️ Admin Panel
@@ -108,6 +113,7 @@ export default function Dashboard() {
           <Route path="portfolio" element={<Portfolio />} />
           <Route path="backtest" element={<Backtest />} />
           <Route path="alerts" element={<Alerts />} />
+          <Route path="journal" element={<Journal />} />
           <Route path="*" element={<GlobalMarket />} />
         </Routes>
       </main>

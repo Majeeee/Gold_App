@@ -40,10 +40,10 @@ public class AlertService {
 
             String msg = buildAlertMessage(alert, market, currentPrice);
 
-            // Push to browser/mobile via WebSocket
-            messagingTemplate.convertAndSendToUser(
-                    userEmail, "/queue/alert",
-                    new AlertEvent(alert.getId(), market, msg, currentPrice.toPlainString()));
+            // Broadcast via WebSocket; payload contains userEmail so clients can filter
+            messagingTemplate.convertAndSend(
+                    "/topic/alerts",
+                    new AlertEvent(alert.getId(), userEmail, market, msg, currentPrice.toPlainString()));
 
             // Push via Telegram + Email
             notificationService.sendDirectMessage(userEmail, "🔔 Gold Alert", msg);
@@ -62,5 +62,5 @@ public class AlertService {
                 currentPrice.toPlainString(), custom);
     }
 
-    public record AlertEvent(Long alertId, String market, String message, String price) {}
+    public record AlertEvent(Long alertId, String userEmail, String market, String message, String price) {}
 }

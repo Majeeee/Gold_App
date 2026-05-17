@@ -3,24 +3,116 @@ from pydantic import BaseModel
 from typing import Optional
 import uvicorn
 
-from models.trade_journal      import journal, JournalEntry
+from models.trade_journal       import journal, JournalEntry
 from models.attribution_analyzer import attribute_pnl, portfolio_attribution
-from models.meta_model         import tracker, detector, weighter
+from models.meta_model          import tracker, detector, weighter
 from models.market_correlations import (analyze_correlations,
                                          seasonality_analysis,
                                          behavioral_analysis)
-from models.drift_detection    import detect_drift, detect_manipulation, monte_carlo
-from models.portfolio_manager  import (kelly_criterion, position_size,
-                                        correlation_matrix, exposure_analysis,
-                                        version_dataset)
+from models.drift_detection     import detect_drift, detect_manipulation, monte_carlo
+from models.portfolio_manager   import (kelly_criterion, position_size,
+                                         correlation_matrix, exposure_analysis,
+                                         version_dataset)
+from models.ml_models           import predictor
+from models.sentiment           import get_gold_sentiment, analyze_text
 
 app = FastAPI(title="Gold App ML Service", version="3.0")
 
 
-# ── Health ──────────────────────────────────────────────────────────────────
+# ── Health ───────────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "ml-service"}
+    return {"status": "ok", "service": "ml-service", "models_trained": predictor.is_trained}
+
+
+# ── Train ────────────────────────────────────────────────────────────────────
+class TrainRequest(BaseModel):
+    prices: list[float]
+
+@app.post("/ml/train")
+def train(req: TrainRequest):
+    return predictor.train(req.prices)
+
+
+# ── Combined prediction (RF + GB + LSTM + GRU + Ensemble) ───────────────────
+class PredictRequest(BaseModel):
+    prices:      list[float]
+    steps_ahead: Optional[int]   = 1
+    regime:      Optional[str]   = "RANGE"
+    timeframe:   Optional[str]   = "MID"
+    with_ci:     Optional[bool]  = True
+
+@app.post("/ml/predict/combined")
+def predict_combined(req: PredictRequest):
+    if len(req.prices) < 5:
+        raise HTTPException(400, "Need at least 5 prices")
+
+    # Auto-train if not trained yet
+    if not predictor.is_trained and len(req.prices) >= 30:
+        predictor.train(req.prices)
+
+    steps = req.steps_ahead or 1
+    result = predictor.predict_combined(req.prices, steps, req.regime or "RANGE")
+
+    if req.with_ci:
+        result["confidence"] = predictor.confidence_interval(req.prices)
+
+    # Timeframe labels
+    label_map = {"SHORT": "1 hour ahead", "MID": "1 day ahead", "LONG": "1 week ahead"}
+    result["timeframe_label"] = label_map.get(req.timeframe or "MID", "custom")
+
+    return result
+
+
+# ── Full analysis (prediction + SHAP + confidence + regime) ─────────────────
+class FullAnalysisRequest(BaseModel):
+    prices:      list[float]
+    regime:      Optional[str]  = None
+    timeframe:   Optional[str]  = "MID"
+    entry_price: Optional[float] = None
+    trade_type:  Optional[str]  = "BUY"
+
+@app.post("/ml/analysis/full")
+def full_analysis(req: FullAnalysisRequest):
+    prices = req.prices
+    if len(prices) < 5:
+        raise HTTPException(400, "Need at least 5 prices")
+
+    if not predictor.is_trained and len(prices) >= 30:
+        predictor.train(prices)
+
+    regime_info = detector.detect(prices)
+    regime = req.regime or regime_info.get("regime", "RANGE")
+
+    steps_map = {"SHORT": 12, "MID": 24, "LONG": 7}
+    steps = steps_map.get(req.timeframe or "MID", 24)
+
+    prediction   = predictor.predict_combined(prices, steps, regime)
+    confidence   = predictor.confidence_interval(prices)
+    shap_info    = predictor.explain_shap(prices)
+    model_weights = weighter.weights(regime, tracker)
+
+    result = {
+        "prediction":    prediction,
+        "confidence":    confidence,
+        "shap":          shap_info,
+        "regime":        regime_info,
+        "model_weights": model_weights,
+        "timeframe":     req.timeframe,
+    }
+
+    if req.entry_price and len(prices) >= 15:
+        import numpy as np
+        closes = np.array(prices[-15:], dtype=float)
+        atr = float(np.mean(np.abs(np.diff(closes))))
+        is_buy = (req.trade_type or "BUY").upper() == "BUY"
+        result["stop_loss"] = {
+            "atr":        round(atr, 4),
+            "stop_loss":  round(req.entry_price - atr * 1.5 if is_buy else req.entry_price + atr * 1.5, 4),
+            "take_profit": round(req.entry_price + atr * 3.0 if is_buy else req.entry_price - atr * 3.0, 4),
+        }
+
+    return result
 
 
 # ── Trade Journal ────────────────────────────────────────────────────────────
@@ -81,9 +173,9 @@ def portfolio_attr(req: PortfolioAttributionRequest):
 
 # ── Meta Model & Regime ───────────────────────────────────────────────────────
 class RecordPredictionRequest(BaseModel):
-    model:                str
-    predicted_direction:  int
-    actual_direction:     int
+    model:               str
+    predicted_direction: int
+    actual_direction:    int
 
 class RegimeRequest(BaseModel):
     prices: list[float]
@@ -100,15 +192,15 @@ def best_model():
 
 @app.post("/ml/advanced/meta/regime")
 def market_regime(req: RegimeRequest):
-    regime_info = detector.detect(req.prices, req.window)
-    weights     = weighter.weights(regime_info["regime"], tracker)
+    regime_info  = detector.detect(req.prices, req.window)
+    weights      = weighter.weights(regime_info["regime"], tracker)
     return {**regime_info, "model_weights": weights}
 
 
 # ── Correlations ─────────────────────────────────────────────────────────────
 class CorrelationRequest(BaseModel):
-    gold_prices:    list[float]
-    market_prices:  dict[str, list[float]]
+    gold_prices:   list[float]
+    market_prices: dict[str, list[float]]
 
 @app.post("/ml/advanced/correlation")
 def correlation(req: CorrelationRequest):
@@ -121,8 +213,13 @@ class SeasonalityRequest(BaseModel):
     timestamps: list[str]
 
 @app.post("/ml/advanced/seasonality")
-def seasonality(req: SeasonalityRequest):
+def seasonality_post(req: SeasonalityRequest):
     return seasonality_analysis(req.prices, req.timestamps)
+
+# Keep GET alias for doc compatibility
+@app.get("/ml/advanced/seasonality")
+def seasonality_get():
+    return {"note": "Use POST /ml/advanced/seasonality with {prices, timestamps}"}
 
 
 # ── Behavioral Finance ────────────────────────────────────────────────────────
@@ -155,10 +252,10 @@ def manipulation(req: ManipulationRequest):
 
 # ── Monte Carlo ───────────────────────────────────────────────────────────────
 class MonteCarloRequest(BaseModel):
-    prices:        list[float]
-    horizon_days:  Optional[int]   = 10
-    simulations:   Optional[int]   = 1000
-    confidence:    Optional[float] = 0.95
+    prices:       list[float]
+    horizon_days: Optional[int]   = 10
+    simulations:  Optional[int]   = 1000
+    confidence:   Optional[float] = 0.95
 
 @app.post("/ml/advanced/montecarlo")
 def montecarlo(req: MonteCarloRequest):
@@ -173,10 +270,10 @@ class KellyRequest(BaseModel):
     fraction: Optional[float] = 0.5
 
 class PositionSizeRequest(BaseModel):
-    capital:      float
-    risk_pct:     float
-    entry_price:  float
-    stop_loss:    float
+    capital:     float
+    risk_pct:    float
+    entry_price: float
+    stop_loss:   float
 
 class ExposureRequest(BaseModel):
     positions:     list[dict]
@@ -209,6 +306,35 @@ def correl_matrix(req: CorrelMatrixRequest):
 def version(req: VersionRequest):
     return version_dataset(req.data, req.label)
 
+@app.get("/ml/advanced/versions")
+def list_versions():
+    return {"note": "Use POST /ml/advanced/portfolio/version to create versioned snapshots"}
+
+
+# ── Sentiment ─────────────────────────────────────────────────────────────────
+class SentimentTextRequest(BaseModel):
+    text: str
+
+@app.get("/ml/advanced/sentiment")
+def sentiment_news():
+    return get_gold_sentiment()
+
+@app.post("/ml/advanced/sentiment/text")
+def sentiment_text(req: SentimentTextRequest):
+    return analyze_text(req.text)
+
+
+# ── Walk-Forward Validation ───────────────────────────────────────────────────
+class WalkForwardRequest(BaseModel):
+    prices:   list[float]
+    n_splits: Optional[int] = 5
+
+@app.post("/ml/advanced/walkforward")
+def walk_forward(req: WalkForwardRequest):
+    if not predictor.is_trained and len(req.prices) >= 30:
+        predictor.train(req.prices)
+    return predictor.walk_forward(req.prices, req.n_splits or 5)
+
 
 # ── Stop Loss Recommendation ──────────────────────────────────────────────────
 class StopLossRequest(BaseModel):
@@ -222,89 +348,101 @@ class StopLossRequest(BaseModel):
 def stoploss_recommend(req: StopLossRequest):
     if len(req.prices) < 15:
         raise HTTPException(400, "Need at least 15 prices for ATR calculation")
-
     import numpy as np
-    # Use last 15 closes to compute 14-period ATR.
-    # Without separate OHLC we approximate TR as |close[i] - close[i-1]|.
-    # If the caller has OHLC they should compute ATR server-side for accuracy.
-    closes = np.array(req.prices[-15:], dtype=float)
-    tr  = np.abs(np.diff(closes))   # shape (14,)
-    atr = float(np.mean(tr))
-
-    is_buy = req.trade_type.upper() == "BUY"
-
-    sl_atr      = req.entry_price - atr * req.atr_mult if is_buy else req.entry_price + atr * req.atr_mult
-    sl_fixed_1  = req.entry_price * (0.99 if is_buy else 1.01)
-    sl_fixed_2  = req.entry_price * (0.98 if is_buy else 1.02)
-    tp_atr      = req.entry_price + atr * req.tp_mult  if is_buy else req.entry_price - atr * req.tp_mult
-
-    recent_low  = float(np.min(closes[-5:]))
-    recent_high = float(np.max(closes[-5:]))
-    sl_technical = recent_low * 0.999 if is_buy else recent_high * 1.001
-
+    closes  = np.array(req.prices[-15:], dtype=float)
+    atr     = float(np.mean(np.abs(np.diff(closes))))
+    is_buy  = req.trade_type.upper() == "BUY"
+    sl_atr  = req.entry_price - atr * req.atr_mult if is_buy else req.entry_price + atr * req.atr_mult
+    tp_atr  = req.entry_price + atr * req.tp_mult  if is_buy else req.entry_price - atr * req.tp_mult
+    sl_tech = float(np.min(closes[-5:])) * 0.999 if is_buy else float(np.max(closes[-5:])) * 1.001
+    rr = round(abs(tp_atr - req.entry_price) / abs(sl_atr - req.entry_price), 2) if sl_atr != req.entry_price else 0
     return {
-        "entry_price":    round(req.entry_price, 4),
-        "atr":            round(atr, 4),
-        "trade_type":     req.trade_type.upper(),
+        "entry_price": round(req.entry_price, 4),
+        "atr":         round(atr, 4),
+        "trade_type":  req.trade_type.upper(),
         "recommendations": {
             "atr_stop":       round(sl_atr, 4),
-            "technical_stop": round(sl_technical, 4),
-            "fixed_1pct":     round(sl_fixed_1, 4),
-            "fixed_2pct":     round(sl_fixed_2, 4),
+            "technical_stop": round(sl_tech, 4),
+            "fixed_1pct":     round(req.entry_price * (0.99 if is_buy else 1.01), 4),
+            "fixed_2pct":     round(req.entry_price * (0.98 if is_buy else 1.02), 4),
             "take_profit":    round(tp_atr, 4),
         },
-        "risk_reward":    round(abs(tp_atr - req.entry_price) / abs(sl_atr - req.entry_price), 2) if sl_atr != req.entry_price else 0,
-        "recommended":    "atr_stop",
+        "risk_reward": rr,
+        "recommended": "atr_stop",
+    }
+
+
+# ── Black Swan Detection ──────────────────────────────────────────────────────
+class BlackSwanRequest(BaseModel):
+    current_price:  float
+    previous_price: float
+    threshold:      Optional[float] = 0.04   # 4%
+
+@app.post("/ml/stoploss/blackswan")
+def black_swan(req: BlackSwanRequest):
+    if req.previous_price == 0:
+        return {"black_swan": False, "pct_move": 0}
+    pct = abs((req.current_price - req.previous_price) / req.previous_price)
+    is_bs = pct >= req.threshold
+    return {
+        "black_swan":     is_bs,
+        "pct_move":       round(pct * 100, 3),
+        "threshold_pct":  round(req.threshold * 100, 1),
+        "direction":      "UP" if req.current_price > req.previous_price else "DOWN",
+        "action":         "EMERGENCY_CLOSE_ALL" if is_bs else "NORMAL",
+        "message":        f"Black swan detected! {pct*100:.1f}% move exceeds {req.threshold*100:.0f}% threshold" if is_bs else "Normal price movement",
     }
 
 
 # ── Master endpoint ────────────────────────────────────────────────────────────
 class MasterRequest(BaseModel):
-    prices:       list[float]
-    timestamps:   Optional[list[str]] = None
-    entry_price:  Optional[float]     = None
-    trade_type:   Optional[str]       = "BUY"
-    indicators:   Optional[dict]      = None
+    prices:      list[float]
+    timestamps:  Optional[list[str]]  = None
+    entry_price: Optional[float]      = None
+    trade_type:  Optional[str]        = "BUY"
+    indicators:  Optional[dict]       = None
+    timeframe:   Optional[str]        = "MID"
 
 @app.post("/ml/advanced/master")
 def master(req: MasterRequest):
+    prices = req.prices
     result = {}
 
-    # Regime
-    result["regime"] = detector.detect(req.prices)
+    if not predictor.is_trained and len(prices) >= 30:
+        predictor.train(prices)
 
-    # Behavioral
-    result["behavioral"] = behavioral_analysis(req.prices)
+    result["regime"]     = detector.detect(prices)
+    result["behavioral"] = behavioral_analysis(prices)
 
-    # Drift (compare first half vs second half)
-    mid = len(req.prices) // 2
+    mid = len(prices) // 2
     if mid >= 20:
-        result["drift"] = detect_drift(req.prices[:mid], req.prices[mid:])
+        result["drift"] = detect_drift(prices[:mid], prices[mid:])
 
-    # Manipulation
-    result["manipulation"] = detect_manipulation(req.prices)
+    result["manipulation"] = detect_manipulation(prices)
 
-    # Monte Carlo
-    if len(req.prices) >= 30:
-        result["monte_carlo"] = monte_carlo(req.prices)
+    if len(prices) >= 30:
+        result["monte_carlo"] = monte_carlo(prices)
 
-    # Stop Loss
-    if req.entry_price and len(req.prices) >= 15:
+    if req.entry_price and len(prices) >= 15:
         sl_req = StopLossRequest(
-            prices=req.prices, entry_price=req.entry_price, trade_type=req.trade_type or "BUY"
-        )
+            prices=prices, entry_price=req.entry_price, trade_type=req.trade_type or "BUY")
         result["stop_loss"] = stoploss_recommend(sl_req)
 
-    # Seasonality
-    if req.timestamps and len(req.timestamps) == len(req.prices):
-        result["seasonality"] = seasonality_analysis(req.prices, req.timestamps)
+    if req.timestamps and len(req.timestamps) == len(prices):
+        result["seasonality"] = seasonality_analysis(prices, req.timestamps)
 
-    # Attribution
     if req.indicators:
         result["attribution"] = attribute_pnl(0.0, req.indicators, req.trade_type or "BUY")
 
-    # Model weights
-    result["model_weights"] = weighter.weights(result["regime"]["regime"], tracker)
+    regime = result["regime"]["regime"]
+    result["model_weights"] = weighter.weights(regime, tracker)
+
+    # Combined ML prediction
+    steps_map = {"SHORT": 12, "MID": 24, "LONG": 7}
+    steps = steps_map.get(req.timeframe or "MID", 24)
+    result["prediction"] = predictor.predict_combined(prices, steps, regime)
+    result["confidence"]  = predictor.confidence_interval(prices)
+    result["shap"]        = predictor.explain_shap(prices)
 
     return result
 
