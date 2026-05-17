@@ -15,6 +15,8 @@ from models.portfolio_manager   import (kelly_criterion, position_size,
                                          version_dataset)
 from models.ml_models           import predictor
 from models.sentiment           import get_gold_sentiment, analyze_text
+from models.economic_calendar   import get_economic_calendar
+from models.backtesting         import run_backtest
 
 app = FastAPI(title="Gold App ML Service", version="3.0")
 
@@ -445,6 +447,42 @@ def master(req: MasterRequest):
     result["shap"]        = predictor.explain_shap(prices)
 
     return result
+
+
+# ── Economic Calendar ─────────────────────────────────────────────────────────
+class CalendarRequest(BaseModel):
+    fred_api_key: Optional[str] = None
+
+@app.get("/ml/advanced/economic-calendar")
+def economic_calendar_get():
+    return get_economic_calendar()
+
+@app.post("/ml/advanced/economic-calendar")
+def economic_calendar_post(req: CalendarRequest):
+    return get_economic_calendar(req.fred_api_key)
+
+
+# ── Backtesting ───────────────────────────────────────────────────────────────
+class BacktestRequest(BaseModel):
+    prices:           list[float]
+    signals:          Optional[list[int]]   = None
+    initial_capital:  Optional[float]       = 10000.0
+    commission_pct:   Optional[float]       = 0.001
+    stop_loss_pct:    Optional[float]       = None
+    take_profit_pct:  Optional[float]       = None
+
+@app.post("/ml/advanced/backtest")
+def backtest(req: BacktestRequest):
+    if len(req.prices) < 10:
+        raise HTTPException(400, "Need at least 10 prices")
+    return run_backtest(
+        prices=req.prices,
+        signals=req.signals,
+        initial_capital=req.initial_capital or 10000.0,
+        commission_pct=req.commission_pct or 0.001,
+        stop_loss_pct=req.stop_loss_pct,
+        take_profit_pct=req.take_profit_pct,
+    )
 
 
 if __name__ == "__main__":
