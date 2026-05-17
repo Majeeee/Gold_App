@@ -11,11 +11,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:8081',
-        configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq) => {
-            proxyReq.setHeader('origin', 'http://localhost:8081');
-          });
-        }
+        changeOrigin: false,
       },
       '/ws': { target: 'http://localhost:8081', ws: true },
     }

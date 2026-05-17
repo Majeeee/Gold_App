@@ -3,7 +3,9 @@ package se.gold.model;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Entity
 @Table(name = "gold_prices")
@@ -47,6 +49,6 @@ public class GoldPrice {
 
     @PrePersist
     public void prePersist() {
-        if (fetchedAt == null) fetchedAt = LocalDateTime.now();
+        if (fetchedAt == null) fetchedAt = Instant.now().atOffset(ZoneOffset.UTC).toLocalDateTime();
     }
 }

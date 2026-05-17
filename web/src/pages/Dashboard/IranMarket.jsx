@@ -9,13 +9,20 @@ import styles from './Market.module.css';
 const INTERVAL = { SHORT: 60, MID: 300, LONG: 3600 };
 const HIST_TF = '5Y';
 
+function utcMs(s) {
+  if (!s) return NaN;
+  return new Date(String(s).endsWith('Z') ? s : s + 'Z').getTime();
+}
+
 function toCandles(prices, field, intervalSec) {
   const buckets = new Map();
-  const sorted = [...prices].sort((a, b) => new Date(a.fetchedAt) - new Date(b.fetchedAt));
+  const sorted = [...prices].sort((a, b) => utcMs(a.fetchedAt) - utcMs(b.fetchedAt));
   sorted.forEach(p => {
     const price = parseFloat(p[field]);
     if (isNaN(price)) return;
-    const ts = Math.floor(new Date(p.fetchedAt).getTime() / 1000);
+    const ms = utcMs(p.fetchedAt);
+    if (!isFinite(ms)) return;
+    const ts = Math.floor(ms / 1000);
     const t  = Math.floor(ts / intervalSec) * intervalSec;
     if (!buckets.has(t)) {
       buckets.set(t, { time: t, open: price, high: price, low: price, close: price });
@@ -26,7 +33,9 @@ function toCandles(prices, field, intervalSec) {
       c.close = price;
     }
   });
-  return Array.from(buckets.values()).sort((a, b) => a.time - b.time);
+  return Array.from(buckets.values())
+    .filter(c => isFinite(c.time) && c.time > 0)
+    .sort((a, b) => a.time - b.time);
 }
 
 const SIGNAL_COLORS = {

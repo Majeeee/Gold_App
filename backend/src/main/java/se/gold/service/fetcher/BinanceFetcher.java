@@ -38,7 +38,8 @@ public class BinanceFetcher {
     private final RestTemplate rest   = new RestTemplate();
     private final ObjectMapper mapper = new ObjectMapper();
 
-    private BigDecimal lastPrice = BigDecimal.ZERO;
+    private BigDecimal lastPrice    = BigDecimal.ZERO;
+    private int        heartbeatTick = 0;
 
     /** Seed last 24 h of 1-minute closes so Short/Mid/Long charts have data immediately. */
     @PostConstruct
@@ -54,15 +55,46 @@ public class BinanceFetcher {
 
             List<GoldPrice> batch = new ArrayList<>();
             for (com.fasterxml.jackson.databind.JsonNode k : mapper.readTree(json)) {
+                double open  = k.get(1).asDouble();
+                double high  = k.get(2).asDouble();
+                double low   = k.get(3).asDouble();
                 double close = k.get(4).asDouble();
                 if (close <= 0) continue;
-                LocalDateTime ts = Instant.ofEpochMilli(k.get(6).asLong())
-                                          .atOffset(ZoneOffset.UTC).toLocalDateTime();
-                GoldPrice gp = new GoldPrice();
-                gp.setGlobalPriceUsd(BigDecimal.valueOf(close));
-                gp.setSource("GLOBAL");
-                gp.setFetchedAt(ts);
-                batch.add(gp);
+                long openMs  = k.get(0).asLong();
+                long closeMs = k.get(6).asLong();
+                long midMs   = (openMs + closeMs) / 2;
+
+                // Store open at kline open time
+                GoldPrice gpO = new GoldPrice();
+                gpO.setGlobalPriceUsd(BigDecimal.valueOf(open));
+                gpO.setSource("GLOBAL");
+                gpO.setFetchedAt(Instant.ofEpochMilli(openMs).atOffset(ZoneOffset.UTC).toLocalDateTime());
+                batch.add(gpO);
+
+                // Store high at midpoint (gives toCandles a proper high value)
+                if (high > open + 0.0001) {
+                    GoldPrice gpH = new GoldPrice();
+                    gpH.setGlobalPriceUsd(BigDecimal.valueOf(high));
+                    gpH.setSource("GLOBAL");
+                    gpH.setFetchedAt(Instant.ofEpochMilli(midMs - 5000).atOffset(ZoneOffset.UTC).toLocalDateTime());
+                    batch.add(gpH);
+                }
+
+                // Store low at midpoint (gives toCandles a proper low value)
+                if (low < open - 0.0001) {
+                    GoldPrice gpL = new GoldPrice();
+                    gpL.setGlobalPriceUsd(BigDecimal.valueOf(low));
+                    gpL.setSource("GLOBAL");
+                    gpL.setFetchedAt(Instant.ofEpochMilli(midMs + 5000).atOffset(ZoneOffset.UTC).toLocalDateTime());
+                    batch.add(gpL);
+                }
+
+                // Store close at kline close time
+                GoldPrice gpC = new GoldPrice();
+                gpC.setGlobalPriceUsd(BigDecimal.valueOf(close));
+                gpC.setSource("GLOBAL");
+                gpC.setFetchedAt(Instant.ofEpochMilli(closeMs).atOffset(ZoneOffset.UTC).toLocalDateTime());
+                batch.add(gpC);
             }
             goldPriceRepository.saveAll(batch);
             lastPrice = batch.isEmpty() ? BigDecimal.ZERO
@@ -89,13 +121,15 @@ public class BinanceFetcher {
             BigDecimal previousPrice = lastPrice;
             lastPrice = price;
 
+            LocalDateTime now = Instant.now().atOffset(ZoneOffset.UTC).toLocalDateTime();
             GoldPrice gp = new GoldPrice();
             gp.setGlobalPriceUsd(price);
             gp.setSource("GLOBAL");
+            gp.setFetchedAt(now);
             goldPriceRepository.save(gp);
 
             messagingTemplate.convertAndSend("/topic/global-price",
-                new PriceUpdate("GLOBAL", price.toPlainString(), LocalDateTime.now().toString()));
+                new PriceUpdate("GLOBAL", price.toPlainString(), now + "Z"));
 
             tradeMonitorService.checkTrades("GLOBAL", price);
             stopLossService.checkAdvancedStops("GLOBAL", price, previousPrice);
@@ -110,10 +144,19 @@ public class BinanceFetcher {
 
     @Scheduled(fixedDelay = 10000)
     public void heartbeat() {
-        if (lastPrice.compareTo(BigDecimal.ZERO) > 0) {
-            messagingTemplate.convertAndSend("/topic/global-price",
-                new PriceUpdate("GLOBAL", lastPrice.toPlainString(), LocalDateTime.now().toString()));
+        if (lastPrice.compareTo(BigDecimal.ZERO) == 0) return;
+        heartbeatTick++;
+        LocalDateTime now = Instant.now().atOffset(ZoneOffset.UTC).toLocalDateTime();
+        // Persist price to DB every 60 s even when price unchanged (keeps chart history alive)
+        if (heartbeatTick % 6 == 0) {
+            GoldPrice gp = new GoldPrice();
+            gp.setGlobalPriceUsd(lastPrice);
+            gp.setSource("GLOBAL");
+            gp.setFetchedAt(now);
+            goldPriceRepository.save(gp);
         }
+        messagingTemplate.convertAndSend("/topic/global-price",
+            new PriceUpdate("GLOBAL", lastPrice.toPlainString(), now + "Z"));
     }
 
     public boolean isConnected() { return lastPrice.compareTo(BigDecimal.ZERO) > 0; }

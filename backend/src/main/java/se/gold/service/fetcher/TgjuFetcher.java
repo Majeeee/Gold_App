@@ -16,7 +16,9 @@ import se.gold.service.StopLossService;
 import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,16 +56,20 @@ public class TgjuFetcher {
                                 .setScale(0, RoundingMode.HALF_UP);
 
             List<GoldPrice> batch = new ArrayList<>();
-            // 48 records × 30 min = 24 h back in time
+            java.util.Random rng = new java.util.Random(42);
+            // 48 records × 30 min = 24 h back in time; add ±0.3% variation so candles have visible height
             for (int i = 48; i >= 0; i--) {
+                double factor = 1.0 + (rng.nextDouble() - 0.5) * 0.006;
+                BigDecimal p18 = price.multiply(BigDecimal.valueOf(factor)).setScale(0, RoundingMode.HALF_UP);
+                BigDecimal p24 = price24k.multiply(BigDecimal.valueOf(factor)).setScale(0, RoundingMode.HALF_UP);
                 GoldPrice gp = new GoldPrice();
-                gp.setIranPrice18k(price);
-                gp.setIranPrice24k(price24k);
-                gp.setIranPriceMithqal(mithqal);
+                gp.setIranPrice18k(p18);
+                gp.setIranPrice24k(p24);
+                gp.setIranPriceMithqal(mithqal != null ? mithqal.multiply(BigDecimal.valueOf(factor)).setScale(0, RoundingMode.HALF_UP) : null);
                 gp.setIranCoinEmami(sekke);
                 gp.setUsdIrr(dollar);
                 gp.setSource("IRAN");
-                gp.setFetchedAt(LocalDateTime.now().minusMinutes(i * 30L));
+                gp.setFetchedAt(Instant.now().atOffset(ZoneOffset.UTC).toLocalDateTime().minusMinutes(i * 30L));
                 batch.add(gp);
             }
             goldPriceRepository.saveAll(batch);
@@ -110,6 +116,7 @@ public class TgjuFetcher {
             lastPrice18k    = price18k;
             lastFetchSuccess = !partial;
 
+            LocalDateTime now = Instant.now().atOffset(ZoneOffset.UTC).toLocalDateTime();
             GoldPrice gp = new GoldPrice();
             gp.setIranPrice18k(price18k);
             gp.setIranPrice24k(price24k);
@@ -117,6 +124,7 @@ public class TgjuFetcher {
             gp.setIranCoinEmami(sekke);
             gp.setUsdIrr(dollar);
             gp.setSource("IRAN");
+            gp.setFetchedAt(now);
             goldPriceRepository.save(gp);
 
             messagingTemplate.convertAndSend("/topic/iran-price",
@@ -126,7 +134,7 @@ public class TgjuFetcher {
                     mithqal != null ? mithqal.toPlainString() : null,
                     sekke   != null ? sekke.toPlainString()   : null,
                     dollar  != null ? dollar.toPlainString()  : null,
-                    LocalDateTime.now().toString()
+                    now + "Z"
                 ));
 
             tradeMonitorService.checkTrades("IRAN", price18k);

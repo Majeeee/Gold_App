@@ -6,6 +6,7 @@
   background: var(--bg2); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; padding: 16px 0;
   position: fixed; height: 100vh; overflow-y: auto;
+  z-index: 200;
 }
 .sidebarLogo {
   display: flex; align-items: center; gap: 10px;

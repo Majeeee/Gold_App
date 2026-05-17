@@ -49,6 +49,8 @@ public class SecurityConfig {
                     .requestMatchers("/api/history/**").permitAll()
                     .requestMatchers("/api/gold/prices/history").permitAll()
                     .requestMatchers("/api/gold/price/**").permitAll()
+                    .requestMatchers("/api/gold/signal").permitAll()
+                    .requestMatchers("/api/gold/signal/analyze").permitAll()
                     .requestMatchers("/api/gold/status").permitAll()
                     .requestMatchers("/api/liquidity").permitAll()
                     .requestMatchers("/ws/**").permitAll()
@@ -56,7 +58,6 @@ public class SecurityConfig {
                     // ── Admin only ───────────────────────────────────
                     .requestMatchers("/api/admin/**").hasRole("ADMIN")
                     // ── Authenticated user endpoints ─────────────────
-                    .requestMatchers("/api/gold/signal/**").authenticated()
                     .requestMatchers("/api/gold/backtest").authenticated()
                     .requestMatchers("/api/trades/**").authenticated()
                     .requestMatchers("/api/stoploss/**").authenticated()
