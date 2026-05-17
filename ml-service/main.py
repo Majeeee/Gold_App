@@ -17,6 +17,7 @@ from models.ml_models           import predictor
 from models.sentiment           import get_gold_sentiment, analyze_text
 from models.economic_calendar   import get_economic_calendar
 from models.backtesting         import run_backtest
+from models.deep_learning       import dl_predictor
 
 app = FastAPI(title="Gold App ML Service", version="3.0")
 
@@ -483,6 +484,41 @@ def backtest(req: BacktestRequest):
         stop_loss_pct=req.stop_loss_pct,
         take_profit_pct=req.take_profit_pct,
     )
+
+
+# ── Deep Learning (TensorFlow LSTM + GRU) ────────────────────────────────────
+class DLTrainRequest(BaseModel):
+    prices:     list[float]
+    epochs:     Optional[int] = 50
+    batch_size: Optional[int] = 16
+
+class DLPredictRequest(BaseModel):
+    prices:      list[float]
+    steps_ahead: Optional[int] = 1
+    regime:      Optional[str] = "RANGE"
+
+class DLConfidenceRequest(BaseModel):
+    prices:  list[float]
+    mc_runs: Optional[int] = 30
+
+@app.get("/ml/dl/status")
+def dl_status():
+    return dl_predictor.status()
+
+@app.post("/ml/dl/train")
+def dl_train(req: DLTrainRequest):
+    return dl_predictor.train(req.prices, req.epochs or 50, req.batch_size or 16)
+
+@app.post("/ml/dl/predict")
+def dl_predict(req: DLPredictRequest):
+    result = dl_predictor.predict(req.prices, req.steps_ahead or 1, req.regime or "RANGE")
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return result
+
+@app.post("/ml/dl/confidence")
+def dl_confidence(req: DLConfidenceRequest):
+    return dl_predictor.confidence_interval(req.prices, req.mc_runs or 30)
 
 
 if __name__ == "__main__":

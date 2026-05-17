@@ -9,6 +9,8 @@ import se.gold.model.UserPreferences;
 import se.gold.repository.UserPreferencesRepository;
 import se.gold.repository.UserRepository;
 
+import java.util.Objects;
+
 
 @RestController
 @RequestMapping("/api/preferences")
@@ -41,7 +43,7 @@ public class UserPreferencesController {
         if (req.telegramAlerts()   != null) prefs.setTelegramAlerts(req.telegramAlerts());
         if (req.pushNotifications() != null) prefs.setPushNotifications(req.pushNotifications());
 
-        prefsRepository.save(prefs);
+        prefsRepository.save(Objects.requireNonNull(prefs));
         return ResponseEntity.ok(prefs);
     }
 

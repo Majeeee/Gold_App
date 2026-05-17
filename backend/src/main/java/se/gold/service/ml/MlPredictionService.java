@@ -12,6 +12,7 @@ import se.gold.model.Timeframe;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Predicts gold price using the Python ML service (RF + GB + LSTM + GRU ensemble).
@@ -83,7 +84,6 @@ public class MlPredictionService {
                 new double[]{lrPred * 0.99, lrPred * 1.01});
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> callPython(List<BigDecimal> prices, Timeframe timeframe, int steps) {
         List<Double> priceList = prices.stream()
                 .map(BigDecimal::doubleValue)
@@ -101,7 +101,7 @@ public class MlPredictionService {
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<Map<String, Object>> resp = rest.exchange(
                 mlServiceUrl + "/ml/predict/combined",
-                HttpMethod.POST, entity,
+                Objects.requireNonNull(HttpMethod.POST), entity,
                 new ParameterizedTypeReference<>() {});
         return resp.getBody();
     }

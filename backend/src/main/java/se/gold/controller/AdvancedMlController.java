@@ -10,6 +10,7 @@ import se.gold.service.StopLossService;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Proxies advanced ML endpoints to the Python FastAPI ml-service.
@@ -33,7 +34,7 @@ public class AdvancedMlController {
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
             return restTemplate.exchange(
-                mlServiceUrl + path, HttpMethod.POST, entity, Object.class);
+                mlServiceUrl + path, Objects.requireNonNull(HttpMethod.POST), entity, Object.class);
         } catch (Exception e) {
             log.warn("ML service unavailable: {}", e.getMessage());
             return ResponseEntity.status(503)
@@ -91,7 +92,7 @@ public class AdvancedMlController {
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
             return restTemplate.exchange(
                 mlServiceUrl + "/ml/advanced/journal/outcome",
-                HttpMethod.PUT, entity, Object.class);
+                Objects.requireNonNull(HttpMethod.PUT), entity, Object.class);
         } catch (Exception e) {
             return ResponseEntity.status(503).body(Map.of("error", e.getMessage()));
         }

@@ -9,6 +9,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Calls the Python FastAPI ml-service for stop-loss recommendations.
@@ -43,7 +44,7 @@ public class PythonMlService {
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             ResponseEntity<Map<String, Object>> resp = rest.exchange(
                     mlServiceUrl + "/ml/stoploss/recommend",
-                    HttpMethod.POST, entity,
+                    Objects.requireNonNull(HttpMethod.POST), entity,
                     new ParameterizedTypeReference<Map<String, Object>>() {});
             return resp.getBody() != null ? resp.getBody() : Map.of();
         } catch (Exception e) {

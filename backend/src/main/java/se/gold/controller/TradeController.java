@@ -9,6 +9,7 @@ import se.gold.model.Timeframe;
 import se.gold.model.User;
 import se.gold.repository.TradeRepository;
 import se.gold.repository.UserRepository;
+import se.gold.service.notification.TradeNotificationProducer;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -23,6 +24,7 @@ public class TradeController {
 
     private final TradeRepository tradeRepository;
     private final UserRepository userRepository;
+    private final TradeNotificationProducer notificationProducer;
 
     @GetMapping
     public ResponseEntity<?> getAllTrades(@AuthenticationPrincipal String email) {
@@ -83,6 +85,7 @@ public class TradeController {
         }
 
         tradeRepository.save(trade);
+        notificationProducer.tradeOpened(trade);
         return ResponseEntity.ok(trade);
     }
 
@@ -128,6 +131,7 @@ public class TradeController {
         }
 
         tradeRepository.save(trade);
+        notificationProducer.tradeOpened(trade);
         return ResponseEntity.ok(trade);
     }
 
@@ -169,6 +173,7 @@ public class TradeController {
         trade.setPnl(pnl);
         trade.setPnlPercent(pnlPct);
         tradeRepository.save(trade);
+        notificationProducer.tradeClosed(trade);
 
         return ResponseEntity.ok(trade);
     }
@@ -182,6 +187,7 @@ public class TradeController {
             return ResponseEntity.status(403).body(Map.of("error", "Not your trade"));
         }
         tradeRepository.delete(trade);
+        notificationProducer.tradeDeleted(id, email);
         return ResponseEntity.ok(Map.of("message", "Trade deleted"));
     }
 

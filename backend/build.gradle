@@ -39,6 +39,9 @@ dependencies {
     // ── Email ─────────────────────────────────────────────────
     implementation 'org.springframework.boot:spring-boot-starter-mail'
 
+    // ── RabbitMQ ──────────────────────────────────────────────
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+
     // ── Database ──────────────────────────────────────────────
     runtimeOnly 'org.postgresql:postgresql'
     runtimeOnly 'com.h2database:h2'
