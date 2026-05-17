@@ -1,0 +1,35 @@
+.page { padding: 24px; }
+.title { font-size: 20px; font-weight: bold; color: var(--gold); margin-bottom: 20px; }
+.controls {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px;
+  display: flex; flex-direction: column; gap: 16px;
+  max-width: 600px; margin-bottom: 24px;
+}
+.controlGroup { display: flex; flex-direction: column; gap: 6px; }
+.label { font-size: 12px; color: var(--text2); }
+.btnGroup { display: flex; gap: 6px; }
+.optBtn {
+  flex: 1; padding: 8px 14px; border-radius: 8px; font-size: 13px;
+  border: 1px solid var(--border); background: transparent; color: var(--text3);
+  transition: all .15s;
+}
+.optBtn:hover { border-color: var(--gold); color: var(--gold); }
+.optActive { background: #1a1200 !important; border-color: var(--gold) !important; color: var(--gold) !important; font-weight: 600; }
+.slider { width: 100%; accent-color: var(--gold); }
+.runBtn {
+  background: var(--gold); color: #fff; border-radius: 8px;
+  padding: 12px; font-size: 15px; font-weight: 600; transition: opacity .15s;
+}
+.runBtn:hover:not(:disabled) { opacity: 0.85; }
+.runBtn:disabled { opacity: 0.6; }
+.result {
+  border-radius: 12px; border: 1px solid; padding: 20px;
+  max-width: 800px;
+}
+.resultPos { background: #0d2a0d; border-color: #1D9E75; }
+.resultNeg { background: #2a0d0d; border-color: #E24B4A; }
+.resultHeader { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 16px; }
+.finalCapital { font-size: 32px; font-weight: bold; margin-bottom: 4px; }
+.statsGrid { display: flex; flex-wrap: wrap; gap: 8px; }
+.chartWrap { border-radius: 8px; overflow: hidden; }

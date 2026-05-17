@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: gold-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-golddb}
+      POSTGRES_USER: ${DB_USER:-goldapp}
+      POSTGRES_PASSWORD: ${DB_PASS:-goldapp123}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-goldapp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: gold-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_USER: ${DB_USER:-goldapp}
+      DB_PASS: ${DB_PASS:-goldapp123}
+      JWT_SECRET: ${JWT_SECRET:-goldapp-super-secret-key-must-be-at-least-32-chars!!}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-YOUR_TOKEN}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-YOUR_BOT}
+      MAIL_USERNAME: ${MAIL_USERNAME:-YOUR_GMAIL}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-YOUR_APP_PASSWORD}
+      FRED_API_KEY: ${FRED_API_KEY:-YOUR_FRED_KEY}
+      BINANCE_API_KEY: ${BINANCE_API_KEY:-YOUR_BINANCE_KEY}
+      BINANCE_SECRET_KEY: ${BINANCE_SECRET_KEY:-YOUR_BINANCE_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  ml-service:
+    build: ./ml-service
+    container_name: gold-ml-service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ml_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: gold-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  ml_data:

@@ -1,0 +1,65 @@
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4e;
+  border-radius: 14px;
+  width: 340px;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.header {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid;
+}
+.typeLabel { font-size: 18px; font-weight: 700; }
+.pair { font-size: 14px; color: var(--text2); flex: 1; }
+.closeBtn {
+  background: transparent; color: var(--text3);
+  font-size: 16px; padding: 2px 6px; border-radius: 4px;
+}
+.closeBtn:hover { color: var(--text); }
+
+.priceRow { display: flex; justify-content: space-between; align-items: center; }
+.priceLabel { font-size: 12px; color: var(--text3); }
+.priceVal { font-size: 20px; font-weight: 600; }
+
+.fields { display: flex; flex-direction: column; gap: 6px; }
+.fieldLabel { font-size: 11px; color: var(--text2); margin-top: 4px; }
+.opt { color: var(--text3); font-style: italic; }
+.input {
+  background: #0f0f1e; border: 1px solid var(--border);
+  border-radius: 7px; padding: 8px 10px;
+  color: var(--text); font-size: 14px; width: 100%;
+}
+.input:focus { border-color: var(--gold); }
+
+.totalRow {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #0f0f1e; border-radius: 8px; padding: 10px 12px;
+}
+.totalLabel { font-size: 11px; color: var(--text3); }
+.totalVal { font-size: 15px; font-weight: 600; color: var(--gold); }
+
+.error { font-size: 12px; color: var(--red); text-align: center; }
+
+.actions { display: flex; gap: 8px; }
+.paperBtn {
+  flex: 1; padding: 11px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: #1e1e3a; border: 1px solid var(--border); color: var(--text2);
+  transition: border-color .15s;
+}
+.paperBtn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+.realBtn {
+  flex: 1; padding: 11px; border-radius: 8px; font-size: 13px; font-weight: 700;
+  color: #fff; transition: opacity .15s;
+}
+.realBtn:hover:not(:disabled) { opacity: 0.85; }
+.paperBtn:disabled, .realBtn:disabled { opacity: 0.5; }
