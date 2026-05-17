@@ -191,6 +191,44 @@ public class AdvancedMlController {
         return proxy("/ml/advanced/portfolio/version", body);
     }
 
+    // ── Black Swan ───────────────────────────────────────────────────────────
+    @PostMapping("/stoploss/blackswan")
+    public ResponseEntity<?> blackSwan(@RequestBody Map<String, Object> body) {
+        return proxy("/ml/stoploss/blackswan", body);
+    }
+
+    // ── Economic Calendar ────────────────────────────────────────────────────
+    @GetMapping("/advanced/economic-calendar")
+    public ResponseEntity<?> economicCalendarGet() {
+        return proxyGet("/ml/advanced/economic-calendar");
+    }
+
+    @PostMapping("/advanced/economic-calendar")
+    public ResponseEntity<?> economicCalendarPost(@RequestBody Map<String, Object> body) {
+        return proxy("/ml/advanced/economic-calendar", body);
+    }
+
+    // ── Deep Learning (TensorFlow LSTM + GRU) ───────────────────────────────
+    @GetMapping("/dl/status")
+    public ResponseEntity<?> dlStatus() {
+        return proxyGet("/ml/dl/status");
+    }
+
+    @PostMapping("/dl/train")
+    public ResponseEntity<?> dlTrain(@RequestBody Map<String, Object> body) {
+        return proxy("/ml/dl/train", body);
+    }
+
+    @PostMapping("/dl/predict")
+    public ResponseEntity<?> dlPredict(@RequestBody Map<String, Object> body) {
+        return proxy("/ml/dl/predict", body);
+    }
+
+    @PostMapping("/dl/confidence")
+    public ResponseEntity<?> dlConfidence(@RequestBody Map<String, Object> body) {
+        return proxy("/ml/dl/confidence", body);
+    }
+
     // ── Records ──────────────────────────────────────────────────────────────
     public record AtrRequest(List<Double> prices, double entryPrice, String tradeType) {}
 }
