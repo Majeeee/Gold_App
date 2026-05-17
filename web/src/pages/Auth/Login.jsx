@@ -35,9 +35,11 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className={styles.form}>
           {error && <div className={styles.error}>{error}</div>}
-          <input className={styles.input} type="email" placeholder="Email"
+          <input id="email" name="email" className={styles.input} type="email"
+            placeholder="Email" autoComplete="email"
             value={email} onChange={e => setEmail(e.target.value)} required />
-          <input className={styles.input} type="password" placeholder="Password"
+          <input id="password" name="password" className={styles.input} type="password"
+            placeholder="Password" autoComplete="current-password"
             value={password} onChange={e => setPassword(e.target.value)} required />
           <button className={styles.btnGold} type="submit" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}

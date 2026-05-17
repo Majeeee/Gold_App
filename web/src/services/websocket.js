@@ -1,5 +1,9 @@
 import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+
+const wsUrl = () => {
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${window.location.host}/ws`;
+};
 
 class WsService {
   constructor() {
@@ -11,7 +15,7 @@ class WsService {
 
   connect(onConnected, onDisconnected) {
     this.client = new Client({
-      webSocketFactory: () => new SockJS('/ws'),
+      brokerURL: wsUrl(),
       reconnectDelay: 5000,
       onConnect: () => {
         this.connected = true;

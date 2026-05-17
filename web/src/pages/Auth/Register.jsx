@@ -35,15 +35,19 @@ export default function Register() {
           {success && <div className={styles.success}>{success}</div>}
 
           <div className={styles.row}>
-            <input className={styles.input} placeholder="First Name *"
+            <input id="firstName" name="firstName" className={styles.input}
+              placeholder="First Name *" autoComplete="given-name"
               value={form.firstName} onChange={e => update('firstName', e.target.value)} required />
-            <input className={styles.input} placeholder="Last Name"
+            <input id="lastName" name="lastName" className={styles.input}
+              placeholder="Last Name" autoComplete="family-name"
               value={form.lastName} onChange={e => update('lastName', e.target.value)} />
           </div>
 
-          <input className={styles.input} type="email" placeholder="Email *"
+          <input id="email" name="email" className={styles.input} type="email"
+            placeholder="Email *" autoComplete="email"
             value={form.email} onChange={e => update('email', e.target.value)} required />
-          <input className={styles.input} type="password" placeholder="Password * (min 6)"
+          <input id="password" name="password" className={styles.input} type="password"
+            placeholder="Password * (min 6)" autoComplete="new-password"
             value={form.password} onChange={e => update('password', e.target.value)} required />
 
           <div className={styles.countryRow}>

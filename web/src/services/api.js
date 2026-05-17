@@ -20,7 +20,7 @@ api.interceptors.request.use(config => {
 api.interceptors.response.use(
   res => res,
   err => {
-    if (err.response?.status === 401) window.location.href = '/login';
+    if (err.response?.status === 401) window.location.replace('/login');
     return Promise.reject(err);
   }
 );
