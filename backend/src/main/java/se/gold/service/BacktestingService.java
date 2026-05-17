@@ -56,8 +56,7 @@ public class BacktestingService {
     ) {}
 
     public BacktestResult run(String market, int months, double initialCapital, Timeframe timeframe) {
-        // Bug fix: cap to 3 months to prevent unbounded DB fetch + OOM on long periods
-        int cappedMonths = Math.min(months, 3);
+        int cappedMonths = Math.min(months, 12);
         LocalDateTime from = LocalDateTime.now().minusMonths(cappedMonths);
         List<GoldPrice> prices = goldPriceRepository
                 .findBySourceAndFetchedAtAfterOrderByFetchedAtAsc(market, from);

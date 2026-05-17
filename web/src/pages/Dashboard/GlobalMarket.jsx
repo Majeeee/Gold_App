@@ -25,12 +25,13 @@ function toCandles(prices, intervalSec) {
     const ts = Math.floor(ms / 1000);
     const t  = Math.floor(ts / intervalSec) * intervalSec;
     if (!buckets.has(t)) {
-      buckets.set(t, { time: t, open: price, high: price, low: price, close: price });
+      buckets.set(t, { time: t, open: price, high: price, low: price, close: price, ticks: 1 });
     } else {
       const c = buckets.get(t);
       c.high  = Math.max(c.high, price);
       c.low   = Math.min(c.low,  price);
       c.close = price;
+      c.ticks++;
     }
   });
   return Array.from(buckets.values())
@@ -123,7 +124,11 @@ export default function GlobalMarket() {
       console.log('[Chart] raw records:', raw.length, '→ candles:', candles.length,
         'first:', candles[0], 'last:', candles[candles.length - 1]);
       setHistory(candles);
-      setVolumes([]);
+      setVolumes(candles.map(c => ({
+        time:  c.time,
+        value: c.ticks || 1,
+        color: c.close >= c.open ? '#22c55e33' : '#ef444433',
+      })));
     } catch (e) { console.error('history:', e.message); }
 
     setLoading(false);
